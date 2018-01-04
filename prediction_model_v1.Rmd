@@ -1,0 +1,114 @@
+---
+title: '''HAR (personal activity) quality perdiction'' project.' 
+author: "mirzarashid abbasov | practical machine learning course project | coursera"
+date: "31.DEC.2017"
+output:
+  html_document: default
+---
+
+### Synopsis
+**Human Activity Recognition (HAR)** - has emerged as a key research area in the last years.If you have the valid dataset you will answer the following questions: 
+
+* energy expenditure trend;   
+* elderly monitoring;
+* digital assistants for weight lifting exercises;
+* etc;
+
+The basic goal of this peer-graded assignment is to create appropriate model via using [training dataset](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) and to predict 20 different test cases from [test dataset](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv) 
+
+Please find the appropriate data & information [additional info](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har) 
+
+
+### Data loading
+We need to load **training data** and analyze and clearing it for data quality purpose: missing values, **NA** values etc. 
+```{r data_load, include = TRUE, cache = TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+# load relevant library
+suppressMessages(library(caret))
+suppressMessages(library(randomForest))
+
+# clean up workspance
+rm(list = ls())
+
+# setup work directory
+setwd("/Users/mirzarashid.abbasov/repos/PredictionAssignment/week4")
+
+# set source url link
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# downloand data from url
+download.file(trainUrl, "./data/pml_training.csv")
+download.file(testUrl, "./data/pml_testing.csv")
+
+# read data from source files to the temp variable
+train <- read.csv("./data/pml_training.csv", header=T, sep=',', dec = ".", 
+                  na.strings = c("","NA","#DIV/0!"))
+test <- read.csv("./data/pml_testing.csv", header=T, sep=',', dec = ".",
+                 na.strings = c("","NA","#DIV/0!"))
+```
+
+### Data Pre Processing
+We can not use all data from the columns of the data set, because the data set has columns with **NA** values and some columns are not relevant for models (for example, **raw_timestamp_part_1**, **raw_timestamp_part_2**, etc.),
+We need to leave the most significant columns of the data set for model fitting purpose and remove the non-relevant ones.
+
+I used **colMeans()** function for each coloumns (it's very easy method). if means() = 0 we will not use this column to fit model purpose or you will use **nearZeroVar(training, saveMetrics=TRUE)** function and analyze the candidates (coloumns) 
+to remove from dataset or **cor()** function to determine correlation coefficient each columns of dataset.
+
+```{r data_preProcessing, include = TRUE, cache = TRUE}
+# remove first 6 column, because they are not relevant to fit any model
+train <- train[, -(1:6)]
+
+test <- test[, -(1:6)]
+
+usableCol <- round(colMeans(is.na(train)), 2)
+
+index <- which(usableCol==0)[-1]
+
+train <- train[, index]
+
+test <- test[, index]
+
+# change class to numeric class for better performance
+for(i in 1:(length(train)-1)){
+        train[,i] <- as.numeric(train[,i])
+        test[,i] <- as.numeric(test[,i])
+}
+```
+
+### Fit to model
+I chose the most popular **random forests model**, because it is one of the best model in accuracy and computation speed. I used **doMC** packages to speed up the computation. The expected computation time at given data volumes is ~ **20 min**.
+```{r fit_models_Random_Forests, include = TRUE, cache = TRUE}
+
+# split train data set into two sections for cross validation purpose
+splitTrain <- createDataPartition(y=train$classe, p=3/4, list=FALSE)
+
+trainTrainData <- train[splitTrain,]
+
+validationTrainData <- train[-splitTrain,]
+
+# create 8 parallel workers
+registerDoMC(cores = 8)
+
+rfFit <- randomForest(classe~., data = trainTrainData, method ="rf", prox = TRUE) # 01:45 01:54
+
+rfFit
+
+rfPred <- predict(rfFit, validationTrainData)
+
+confusionMatrix(rfPred, validationTrainData$classe)
+
+```
+
+### Conclusion
+Now we ready to predic the test dataset.We can see that OOB error rates of our model is **0.46%** and the model achived an accuraty of **99.69%** 
+```{r conclusion, include = TRUE, cache = TRUE}
+# predict 20 cases 
+rfTestPred <- predict(rfFit, test)
+
+rfTestPred
+```
+
+
+***
+######Mirzarashid Abbasov, almaty, 2017
